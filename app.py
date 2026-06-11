@@ -100,7 +100,8 @@ def generate_ai_intelligence(ticker, news_list):
     
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Updated to stable 2.5 architecture to fix 404 errors
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         context = ""
         for item in news_list[:5]:
@@ -125,7 +126,8 @@ def run_deep_research(ticker, query, info_dict):
         return "Please connect your API key via Secrets."
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Updated to stable 2.5 architecture to fix 404 errors
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         m_cap = info_dict.get('marketCap', 'N/A')
         pe = info_dict.get('trailingPE', 'N/A')
