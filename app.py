@@ -55,7 +55,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 # 2. SIDEBAR & WATCHLIST SYSTEM
 # ==========================================
 st.sidebar.markdown("# GROW // MOVE")
-st.sidebar.markdown("### TERMINAL v1.1")
+st.sidebar.markdown("### TERMINAL v1.2")
 st.sidebar.write("---")
 
 # Default Indian and Global equities
@@ -81,7 +81,7 @@ else:
 # ==========================================
 # 3. CORE PROCESSING ENGINES
 # ==========================================
-@st.cache_data(ttl=1800)  # Caches market data for 30 mins to run incredibly fast
+@st.cache_data(ttl=1800)  # Caches market numbers for 30 mins
 def fetch_market_data(ticker_symbol):
     try:
         ticker = yf.Ticker(ticker_symbol)
@@ -92,6 +92,7 @@ def fetch_market_data(ticker_symbol):
     except Exception:
         return None, None, None
 
+@st.cache_data(ttl=1800)  # NEW: Caches the AI output so it stops triggering 429 limits
 def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
     if not GEMINI_API_KEY:
         return "⚠️ Configure `GEMINI_API_KEY` in your Streamlit Advanced Secrets to see live AI briefings."
@@ -100,7 +101,7 @@ def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # PATH A: News is available -> Run Media Sentiment Analysis
+        # PATH A: News is available
         if news_list and len(news_list) > 0:
             context = ""
             for item in news_list[:5]:
@@ -116,13 +117,12 @@ def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
             Keep it direct, punchy, and professional. Avoid conversational fluff.
             """
         
-        # PATH B: News feed is down -> Run Data-Driven Technical & Fundamental Briefing
+        # PATH B: News feed is down -> Technical & Fundamental Fallback
         else:
             m_cap = info_dict.get('marketCap', 'N/A') if info_dict else 'N/A'
             pe = info_dict.get('trailingPE', 'N/A') if info_dict else 'N/A'
             live_price = info_dict.get('currentPrice', 'N/A') if info_dict else 'N/A'
             
-            # Calculate simple trend indicators from historical dataframe
             if hist_df is not None and not hist_df.empty and len(hist_df) > 10:
                 recent_close = hist_df['Close'].iloc[-1]
                 prev_close_10d = hist_df['Close'].iloc[-10]
@@ -199,7 +199,6 @@ else:
                 c1, c2 = st.columns([5, 3])
                 with c1:
                     st.caption("AI BRIEFING & EVALUATION")
-                    # Passed additional structural data arrays to handle fallback logic seamlessly
                     briefing = generate_ai_intelligence(stock, news, info, hist)
                     st.write(briefing)
                 with c2:
@@ -221,7 +220,6 @@ else:
         if target_stock:
             hist, info, news = fetch_market_data(target_stock)
             if hist is not None and not hist.empty:
-                # Core Metrics Row
                 m1, m2, m3, m4 = st.columns(4)
                 cur = info.get('currency', 'INR') if info else 'INR'
                 
@@ -235,7 +233,6 @@ else:
                 m3.metric("P/E RATIO", f"{info.get('trailingPE', 'N/A')}" if info else "N/A")
                 m4.metric("52W HIGH", f"{info.get('fiftyTwoWeekHigh', 0):,.2f}" if info else "N/A")
                 
-                # Interactive Plotly Chart
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
                     x=hist.index, 
@@ -265,4 +262,3 @@ else:
                     st.markdown("---")
                     st.markdown(f"#### ARCHIVE REPORT // {lab_target}")
                     st.write(result)
-                            
