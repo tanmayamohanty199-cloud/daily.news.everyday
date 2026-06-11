@@ -168,7 +168,7 @@ else:
     with tab_feed:
         st.markdown("### LIVE MARKET SATELLITE")
         for stock in wishlist:
-            with St.expander(f"⚡ {stock} // INTELLIGENCE STREAM", expanded=True):
+            with st.expander(f"⚡ {stock} // INTELLIGENCE STREAM", expanded=True):
                 hist, info, news = fetch_market_data(stock)
                 
                 c1, c2 = st.columns([5, 3])
