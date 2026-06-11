@@ -55,7 +55,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 # 2. SIDEBAR & WATCHLIST SYSTEM
 # ==========================================
 st.sidebar.markdown("# GROW // MOVE")
-st.sidebar.markdown("### TERMINAL v1.2")
+st.sidebar.markdown("### TERMINAL v1.3")
 st.sidebar.write("---")
 
 # Default Indian and Global equities
@@ -81,7 +81,7 @@ else:
 # ==========================================
 # 3. CORE PROCESSING ENGINES
 # ==========================================
-@st.cache_data(ttl=1800)  # Caches market numbers for 30 mins
+@st.cache_data(ttl=1800)  
 def fetch_market_data(ticker_symbol):
     try:
         ticker = yf.Ticker(ticker_symbol)
@@ -92,7 +92,7 @@ def fetch_market_data(ticker_symbol):
     except Exception:
         return None, None, None
 
-@st.cache_data(ttl=1800)  # NEW: Caches the AI output so it stops triggering 429 limits
+@st.cache_data(ttl=86400)  # Cache AI data for 24 hours to protect free tier quotas
 def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
     if not GEMINI_API_KEY:
         return "⚠️ Configure `GEMINI_API_KEY` in your Streamlit Advanced Secrets to see live AI briefings."
@@ -101,7 +101,6 @@ def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # PATH A: News is available
         if news_list and len(news_list) > 0:
             context = ""
             for item in news_list[:5]:
@@ -116,8 +115,6 @@ def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
             2. KEY CATALYSTS: Focus strictly on fundamentals (order volumes, capacity, institutional movements, or macro changes).
             Keep it direct, punchy, and professional. Avoid conversational fluff.
             """
-        
-        # PATH B: News feed is down -> Technical & Fundamental Fallback
         else:
             m_cap = info_dict.get('marketCap', 'N/A') if info_dict else 'N/A'
             pe = info_dict.get('trailingPE', 'N/A') if info_dict else 'N/A'
@@ -134,45 +131,23 @@ def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
                 trend_str = "Data insufficient to map short-term directional trends."
 
             prompt = f"""
-            You are an elite institutional equity researcher. No recent media articles were indexed for ticker {ticker}.
-            Generate a pure market footprint data briefing instead using these parameters:
+            You are an elite institutional equity researcher. Generate a pure market footprint data briefing using these parameters:
+            - Ticker: {ticker}
             - Current Spot Price: {live_price}
             - 10-Day Trajectory: {trend_str}
             - Market Cap Structure: {m_cap}
             - Valuation Multiple (P/E): {pe}
             
             Provide an analytical assessment structured exactly as:
-            1. MARKET FOOTPRINT: Note whether this exhibits high-velocity momentum or structural stabilization, backing it with the valuation multiple or trend data listed above.
-            2. INSTITUTIONAL PERSPECTIVE: Outline what an investor tracking order books, defense/infrastructure tailwinds, or large-scale promoter stakes should watch for under these pricing parameters.
-            Keep it high-density and institutional. No generic filler words.
+            1. MARKET FOOTPRINT: Note directional velocity based on the variables above.
+            2. INSTITUTIONAL PERSPECTIVE: Focus on structural industry tailwinds or what order-book volume monitors must watch.
+            Keep it professional.
             """
             
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
         return f"Intelligence Engine Error: {str(e)}"
-
-def run_deep_research(ticker, query, info_dict):
-    if not GEMINI_API_KEY:
-        return "Please connect your API key via Secrets."
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
-        m_cap = info_dict.get('marketCap', 'N/A')
-        pe = info_dict.get('trailingPE', 'N/A')
-        forward_pe = info_dict.get('forwardPE', 'N/A')
-        
-        prompt = f"""
-        Context: Analyzing equity asset {ticker}. Market Cap: {m_cap}, Trailing P/E: {pe}, Forward P/E: {forward_pe}.
-        User Inquiry: {query}
-        
-        Task: Provide an analytical, data-driven report answering the inquiry. Scan for risk factors, valuation sanity, operational shifts, or structural market moats.
-        """
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"Research Lab Error: {str(e)}"
 
 # ==========================================
 # 4. INTERFACE ARCHITECTURE
@@ -189,18 +164,25 @@ else:
         "🧠 AI RESEARCH LAB"
     ])
 
-    # TAB 1: AUTOMATED BRIEFING (HOMEPAGE)
+    # TAB 1: AUTOMATED BRIEFING
     with tab_feed:
         st.markdown("### LIVE MARKET SATELLITE")
         for stock in wishlist:
-            with st.expander(f"⚡ {stock} // INTELLIGENCE STREAM", expanded=True):
+            with St.expander(f"⚡ {stock} // INTELLIGENCE STREAM", expanded=True):
                 hist, info, news = fetch_market_data(stock)
                 
                 c1, c2 = st.columns([5, 3])
                 with c1:
                     st.caption("AI BRIEFING & EVALUATION")
-                    briefing = generate_ai_intelligence(stock, news, info, hist)
-                    st.write(briefing)
+                    
+                    # Manual click gate keeps your app from automatically wasting your 20 daily requests
+                    if st.button(f"🧠 RUN ENGINE FOR {stock}", key=f"btn_{stock}"):
+                        with st.spinner("Requesting intelligence package..."):
+                            briefing = generate_ai_intelligence(stock, news, info, hist)
+                            st.write(briefing)
+                    else:
+                        st.info("System on standby. Click the run engine button above to pull the analysis.")
+                        
                 with c2:
                     st.caption("RAW MEDIA FEEDS")
                     if news and len(news) > 0:
@@ -212,9 +194,9 @@ else:
                             </div>
                             """, unsafe_allow_html=True)
                     else:
-                        st.info("Yahoo media scraper returned empty index logs for this ticker. AI data briefing active on the left.")
+                        st.info("Yahoo media feed returned empty index logs for this ticker.")
 
-    # TAB 2: VISUAL INTERFACE (CHARTS & METRICS)
+    # TAB 2: VISUAL INTERFACE
     with tab_charts:
         target_stock = st.selectbox("CHOOSE VISUAL TARGET:", wishlist)
         if target_stock:
@@ -258,7 +240,12 @@ else:
             if query:
                 _, info, _ = fetch_market_data(lab_target)
                 with st.spinner("Processing deep financial modeling vectors..."):
-                    result = run_deep_research(lab_target, query, info if info else {})
+                    # Use a dynamic prompt structure for custom lab inquiries
+                    genai.configure(api_key=GEMINI_API_KEY)
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    prompt = f"Context: Analyzing equity asset {lab_target}. Inquiry: {query}"
+                    response = model.generate_content(prompt)
+                    
                     st.markdown("---")
                     st.markdown(f"#### ARCHIVE REPORT // {lab_target}")
-                    st.write(result)
+                    st.write(response.text)
