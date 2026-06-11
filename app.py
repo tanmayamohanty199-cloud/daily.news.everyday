@@ -55,7 +55,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 # 2. SIDEBAR & WATCHLIST SYSTEM
 # ==========================================
 st.sidebar.markdown("# GROW // MOVE")
-st.sidebar.markdown("### TERMINAL v1.0")
+st.sidebar.markdown("### TERMINAL v1.1")
 st.sidebar.write("---")
 
 # Default Indian and Global equities
@@ -92,30 +92,61 @@ def fetch_market_data(ticker_symbol):
     except Exception:
         return None, None, None
 
-def generate_ai_intelligence(ticker, news_list):
+def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
     if not GEMINI_API_KEY:
         return "⚠️ Configure `GEMINI_API_KEY` in your Streamlit Advanced Secrets to see live AI briefings."
-    if not news_list:
-        return "No recent media coverage found for this asset to analyze."
     
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        # Updated to stable 2.5 architecture to fix 404 errors
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        context = ""
-        for item in news_list[:5]:
-            context += f"- Title: {item.get('title')}\n  Publisher: {item.get('publisher')}\n\n"
+        # PATH A: News is available -> Run Media Sentiment Analysis
+        if news_list and len(news_list) > 0:
+            context = ""
+            for item in news_list[:5]:
+                context += f"- Title: {item.get('title')}\n  Publisher: {item.get('publisher')}\n\n"
+                
+            prompt = f"""
+            You are an elite institutional stock research analyst. Analyze the recent headlines for ticker {ticker}:
+            {context}
             
-        prompt = f"""
-        You are an elite institutional stock research analyst. Analyze the recent headlines for ticker {ticker}:
-        {context}
+            Provide a sharp assessment broken down into:
+            1. SENTIMENT: (Bullish / Bearish / Neutral) with a clear 1-sentence reasoning.
+            2. KEY CATALYSTS: Focus strictly on fundamentals (order volumes, capacity, institutional movements, or macro changes).
+            Keep it direct, punchy, and professional. Avoid conversational fluff.
+            """
         
-        Provide a sharp assessment broken down into:
-        1. SENTIMENT: (Bullish / Bearish / Neutral) with a clear 1-sentence reasoning.
-        2. KEY CATALYSTS: Focus strictly on fundamentals (order volumes, capacity, institutional movements, or macro changes).
-        Keep it direct, punchy, and professional. Avoid conversational fluff.
-        """
+        # PATH B: News feed is down -> Run Data-Driven Technical & Fundamental Briefing
+        else:
+            m_cap = info_dict.get('marketCap', 'N/A') if info_dict else 'N/A'
+            pe = info_dict.get('trailingPE', 'N/A') if info_dict else 'N/A'
+            live_price = info_dict.get('currentPrice', 'N/A') if info_dict else 'N/A'
+            
+            # Calculate simple trend indicators from historical dataframe
+            if hist_df is not None and not hist_df.empty and len(hist_df) > 10:
+                recent_close = hist_df['Close'].iloc[-1]
+                prev_close_10d = hist_df['Close'].iloc[-10]
+                price_change = ((recent_close - prev_close_10d) / prev_close_10d) * 100
+                trend_str = f"{price_change:+.2f}% over the last 10 trading sessions"
+                if live_price == 'N/A':
+                    live_price = round(recent_close, 2)
+            else:
+                trend_str = "Data insufficient to map short-term directional trends."
+
+            prompt = f"""
+            You are an elite institutional equity researcher. No recent media articles were indexed for ticker {ticker}.
+            Generate a pure market footprint data briefing instead using these parameters:
+            - Current Spot Price: {live_price}
+            - 10-Day Trajectory: {trend_str}
+            - Market Cap Structure: {m_cap}
+            - Valuation Multiple (P/E): {pe}
+            
+            Provide an analytical assessment structured exactly as:
+            1. MARKET FOOTPRINT: Note whether this exhibits high-velocity momentum or structural stabilization, backing it with the valuation multiple or trend data listed above.
+            2. INSTITUTIONAL PERSPECTIVE: Outline what an investor tracking order books, defense/infrastructure tailwinds, or large-scale promoter stakes should watch for under these pricing parameters.
+            Keep it high-density and institutional. No generic filler words.
+            """
+            
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
@@ -126,7 +157,6 @@ def run_deep_research(ticker, query, info_dict):
         return "Please connect your API key via Secrets."
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        # Updated to stable 2.5 architecture to fix 404 errors
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         m_cap = info_dict.get('marketCap', 'N/A')
@@ -169,11 +199,12 @@ else:
                 c1, c2 = st.columns([5, 3])
                 with c1:
                     st.caption("AI BRIEFING & EVALUATION")
-                    briefing = generate_ai_intelligence(stock, news)
+                    # Passed additional structural data arrays to handle fallback logic seamlessly
+                    briefing = generate_ai_intelligence(stock, news, info, hist)
                     st.write(briefing)
                 with c2:
                     st.caption("RAW MEDIA FEEDS")
-                    if news:
+                    if news and len(news) > 0:
                         for item in news[:2]:
                             st.markdown(f"""
                             <div class="news-card">
@@ -182,7 +213,7 @@ else:
                             </div>
                             """, unsafe_allow_html=True)
                     else:
-                        st.write("No raw feeds available at this time.")
+                        st.info("Yahoo media scraper returned empty index logs for this ticker. AI data briefing active on the left.")
 
     # TAB 2: VISUAL INTERFACE (CHARTS & METRICS)
     with tab_charts:
@@ -234,3 +265,4 @@ else:
                     st.markdown("---")
                     st.markdown(f"#### ARCHIVE REPORT // {lab_target}")
                     st.write(result)
+                            
