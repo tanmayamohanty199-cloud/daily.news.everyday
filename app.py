@@ -55,7 +55,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 # 2. SIDEBAR & WATCHLIST SYSTEM
 # ==========================================
 st.sidebar.markdown("# GROW // MOVE")
-st.sidebar.markdown("### TERMINAL v1.3")
+st.sidebar.markdown("### TERMINAL v1.4")
 st.sidebar.write("---")
 
 # Default Indian and Global equities
@@ -92,14 +92,15 @@ def fetch_market_data(ticker_symbol):
     except Exception:
         return None, None, None
 
-@st.cache_data(ttl=86400)  # Cache AI data for 24 hours to protect free tier quotas
+@st.cache_data(ttl=86400)  
 def generate_ai_intelligence(ticker, news_list, info_dict, hist_df):
     if not GEMINI_API_KEY:
         return "⚠️ Configure `GEMINI_API_KEY` in your Streamlit Advanced Secrets to see live AI briefings."
     
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # Swapped to 1.5-flash for higher daily free quota allocation
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         if news_list and len(news_list) > 0:
             context = ""
@@ -175,7 +176,6 @@ else:
                 with c1:
                     st.caption("AI BRIEFING & EVALUATION")
                     
-                    # Manual click gate keeps your app from automatically wasting your 20 daily requests
                     if st.button(f"🧠 RUN ENGINE FOR {stock}", key=f"btn_{stock}"):
                         with st.spinner("Requesting intelligence package..."):
                             briefing = generate_ai_intelligence(stock, news, info, hist)
@@ -240,9 +240,9 @@ else:
             if query:
                 _, info, _ = fetch_market_data(lab_target)
                 with st.spinner("Processing deep financial modeling vectors..."):
-                    # Use a dynamic prompt structure for custom lab inquiries
                     genai.configure(api_key=GEMINI_API_KEY)
-                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    # Swapped here as well to preserve higher limits
+                    model = genai.GenerativeModel('gemini-1.5-flash')
                     prompt = f"Context: Analyzing equity asset {lab_target}. Inquiry: {query}"
                     response = model.generate_content(prompt)
                     
